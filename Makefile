@@ -1,3 +1,4 @@
+# Makefile
 .PHONY: help venv update-pip install test lint format clean
 
 # Python version handling
@@ -11,8 +12,8 @@ help:
 	@echo "  update-pip   - Update pip to latest version"
 	@echo "  install      - Install development dependencies"
 	@echo "  test         - Run tests with coverage"
-	@echo "  lint         - Run all linters"
-	@echo "  format       - Format code with black and isort"
+	@echo "  lint         - Run pre-commit checks on all files"
+	@echo "  format       - Format code with pre-commit autofixes"
 	@echo "  clean        - Remove build artifacts"
 
 venv:
@@ -33,27 +34,12 @@ install: update-pip
 test:
 	$(VENV_BIN)/pytest tests/ --cov=filecombinator --cov-report=term-missing
 
-lint: lint-flake8 lint-mypy lint-bandit lint-pylint
-
-lint-flake8:
-	@echo "Running flake8..."
-	-$(VENV_BIN)/flake8 filecombinator tests
-
-lint-mypy:
-	@echo "Running mypy..."
-	-$(VENV_BIN)/mypy filecombinator tests
-
-lint-bandit:
-	@echo "Running bandit..."
-	-$(VENV_BIN)/bandit -r filecombinator
-
-lint-pylint:
-	@echo "Running pylint..."
-	-$(VENV_BIN)/pylint filecombinator tests
+lint:
+	$(VENV_BIN)/pre-commit run --all-files
 
 format:
-	$(VENV_BIN)/black filecombinator tests
-	$(VENV_BIN)/isort filecombinator tests
+	$(VENV_BIN)/pre-commit run black --all-files
+	$(VENV_BIN)/pre-commit run isort --all-files
 
 clean:
 	rm -rf build/

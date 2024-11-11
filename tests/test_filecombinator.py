@@ -8,17 +8,17 @@ from pathlib import Path
 from typing import Generator
 
 import pytest
-from pytest import FixtureRequest
+from _pytest.fixtures import FixtureRequest
 
 from filecombinator.filecombinator import FileCombinator, FileCombinatorError
 
 
-@pytest.fixture(name="tmp_path_str")  # type: ignore
-def fixture_tmp_path() -> Generator[str, None, None]:
+@pytest.fixture
+def tmp_path_str() -> Generator[str, None, None]:
     """Create a temporary directory with test files.
 
     Returns:
-        Generator yielding the path to the temporary directory
+        Generator[str, None, None]: Path to temporary directory
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         # Create a text file
@@ -38,9 +38,13 @@ def fixture_tmp_path() -> Generator[str, None, None]:
         yield tmpdir
 
 
-@pytest.fixture(name="file_tool")  # type: ignore
+@pytest.fixture(name="file_tool")
 def fixture_file_tool() -> FileCombinator:
-    """Create a FileCombinator instance with test configuration."""
+    """Create a FileCombinator instance with test configuration.
+
+    Returns:
+        FileCombinator: Configured instance for testing
+    """
     return FileCombinator(verbose=True)
 
 
@@ -58,11 +62,17 @@ def test_is_excluded(file_tool: FileCombinator) -> None:
     assert not file_tool.is_excluded(Path("regular_file.txt"))
 
 
-@pytest.mark.parametrize("test_dir", ["tmp_path_str"])  # type: ignore
+@pytest.mark.parametrize("test_dir", ["tmp_path_str"])
 def test_is_binary_file(
     file_tool: FileCombinator, test_dir: str, request: FixtureRequest
 ) -> None:
-    """Test binary file detection."""
+    """Test binary file detection.
+
+    Args:
+        file_tool: FileCombinator instance
+        test_dir: Name of the fixture providing the test directory
+        request: Fixture request object to get the test directory
+    """
     tmpdir = request.getfixturevalue(test_dir)
     binary_file = os.path.join(tmpdir, "test.bin")
     text_file = os.path.join(tmpdir, "test.txt")
@@ -71,11 +81,17 @@ def test_is_binary_file(
     assert not file_tool.is_binary_file(text_file)
 
 
-@pytest.mark.parametrize("test_dir", ["tmp_path_str"])  # type: ignore
+@pytest.mark.parametrize("test_dir", ["tmp_path_str"])
 def test_process_directory(
     file_tool: FileCombinator, test_dir: str, request: FixtureRequest
 ) -> None:
-    """Test directory processing."""
+    """Test directory processing.
+
+    Args:
+        file_tool: FileCombinator instance
+        test_dir: Name of the fixture providing the test directory
+        request: Fixture request object to get the test directory
+    """
     tmpdir = request.getfixturevalue(test_dir)
     output_file = os.path.join(tmpdir, "output.txt")
     file_tool.process_directory(tmpdir, output_file)
@@ -91,11 +107,17 @@ def test_process_directory(
         assert "subfile.txt" in content
 
 
-@pytest.mark.parametrize("test_dir", ["tmp_path_str"])  # type: ignore
+@pytest.mark.parametrize("test_dir", ["tmp_path_str"])
 def test_file_info(
     file_tool: FileCombinator, test_dir: str, request: FixtureRequest
 ) -> None:
-    """Test file information gathering."""
+    """Test file information gathering.
+
+    Args:
+        file_tool: FileCombinator instance
+        test_dir: Name of the fixture providing the test directory
+        request: Fixture request object to get the test directory
+    """
     tmpdir = request.getfixturevalue(test_dir)
     text_file = os.path.join(tmpdir, "test.txt")
     info = file_tool.get_file_info(text_file)
