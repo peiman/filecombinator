@@ -1,0 +1,4 @@
+# requirements.txt
+# Runtime dependencies for FileCombinator project
+
+python-magic>=0.4.27
