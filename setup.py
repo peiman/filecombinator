@@ -18,7 +18,15 @@ setup(
     setup_requires=["setuptools_scm"],
     entry_points={
         "console_scripts": [
-            "filecombinator=filecombinator.cli:cli",
+            "filecombinator=filecombinator.cli:main",
+        ],
+    },
+    include_package_data=True,  # Add this line to include non-Python files
+    package_data={
+        "filecombinator": [
+            "core/*.txt",
+            "core/*.yaml",
+            "py.typed",
         ],
     },
 )
