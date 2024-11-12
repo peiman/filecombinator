@@ -18,6 +18,9 @@ pytest-mock==3.12.0
 
 # Dependencies
 python-magic>=0.4.27
+
+# Build
+setuptools_scm>=6.2
 types-PyYAML>=6.0.1
 
 # Type stubs

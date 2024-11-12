@@ -31,3 +31,12 @@ line_length = 88
 exclude_dirs = ["tests"]
 targets = ["filecombinator"]
 skips = ["B101"]
+
+[build-system]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+write_to = "filecombinator/_version.py"
+version_scheme = "post-release"
+local_scheme = "dirty-tag"

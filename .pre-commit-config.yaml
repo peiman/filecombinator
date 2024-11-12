@@ -40,6 +40,7 @@ repos:
     rev: v1.8.0
     hooks:
     -   id: mypy
+        exclude: ^filecombinator/_version\.(py|pyi)$
         additional_dependencies:
             - types-setuptools==69.5.0.20240518
         args: [--config-file=setup.cfg]
