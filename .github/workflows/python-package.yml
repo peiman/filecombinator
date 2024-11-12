@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && contains(github.ref, 'refs/tags/') && contains(github.ref, '.') && !contains(github.ref, 'v')
     permissions:
-      id-token: write
+      id-token: write  # IMPORTANT: mandatory for trusted publishing
       contents: read
 
     steps:
@@ -56,12 +56,8 @@ jobs:
     - name: Install build dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install build twine
+        pip install build
     - name: Build package
       run: python -m build
-    - name: Display structure of dist directory
-      run: ls -R dist/
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@v1.8.11
-      with:
-        verbose: true
