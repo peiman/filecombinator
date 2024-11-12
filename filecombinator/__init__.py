@@ -6,10 +6,12 @@ This package provides functionality to combine multiple files into a single outp
 while maintaining their directory structure and handling different file types.
 """
 
-from .filecombinator import FileCombinator
+from .core.combinator import FileCombinator
+from .core.exceptions import FileCombinatorError
+from .core.models import FileLists, FileStats
 
 __version__ = "0.1.0"
 __author__ = "Peiman Khorramshahi"
 __email__ = "peiman@khorramshahi.com"
 
-__all__ = ["FileCombinator"]
+__all__ = ["FileCombinator", "FileCombinatorError", "FileStats", "FileLists"]
