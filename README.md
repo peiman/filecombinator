@@ -28,7 +28,7 @@ pip install filecombinator
 Basic usage:
 
 ```bash
-filecombinator                     # Process current directory
+filecombinator                    # Process current directory
 filecombinator -d /path/to/dir    # Process specific directory
 filecombinator -o output.txt      # Custom output file
 filecombinator -e node_modules    # Exclude patterns
