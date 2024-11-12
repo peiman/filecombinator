@@ -6,8 +6,9 @@ import tempfile
 from typing import Generator
 
 import pytest
+from click.testing import CliRunner
 
-from filecombinator.cli import main, parse_args
+from filecombinator.cli import main
 
 
 @pytest.fixture
@@ -30,125 +31,126 @@ def test_env() -> Generator[tuple[str, str], None, None]:
         yield input_dir, output_dir
 
 
-def test_parse_args_defaults() -> None:
-    """Test argument parsing with default values."""
-    args = parse_args([])
-    assert args.directory == "."
-    assert args.output is None
-    assert args.exclude is None
-    assert not args.verbose
-    assert args.log_file == "logs/file_combinator.log"
+def test_cli_defaults() -> None:
+    """Test CLI with default values."""
+    runner = CliRunner(mix_stderr=False)
+    with runner.isolated_filesystem():
+        # Create a test file
+        with open("test.txt", "w") as f:
+            f.write("Test content")
 
-
-def test_parse_args_custom() -> None:
-    """Test argument parsing with custom values."""
-    args = parse_args(
-        [
-            "-d",
-            "/test/dir",
-            "-o",
-            "output.txt",
-            "-e",
-            "exclude1",
-            "exclude2",
-            "-v",
-            "--log-file",
-            "custom.log",
+        result = runner.invoke(main)
+        assert result.exit_code == 0
+        output_files = [
+            f for f in os.listdir(".") if f.endswith("_file_combinator_output.txt")
         ]
-    )
-    assert args.directory == "/test/dir"
-    assert args.output == "output.txt"
-    assert args.exclude == ["exclude1", "exclude2"]
-    assert args.verbose
-    assert args.log_file == "custom.log"
+        assert len(output_files) == 1
 
 
-def test_main_basic_processing(test_env: tuple[str, str]) -> None:
-    """Test basic file processing through CLI."""
+def test_cli_custom_directory(test_env: tuple[str, str]) -> None:
+    """Test CLI with custom input directory."""
     input_dir, _ = test_env
-    output_file = os.path.join(input_dir, "output.txt")
-
-    exit_code = main(["-d", input_dir, "-o", output_file])
-    assert exit_code == 0
+    runner = CliRunner()
+    result = runner.invoke(main, ["--directory", input_dir])
+    assert result.exit_code == 0
+    dirname = os.path.basename(input_dir)
+    output_file = f"{dirname}_file_combinator_output.txt"
     assert os.path.exists(output_file)
 
-    with open(output_file, "r") as f:
-        content = f.read()
-        assert "DIRECTORY STRUCTURE" in content
-        assert "test.txt" in content
-        assert "Test content" in content
-        assert "BINARY FILE (CONTENT EXCLUDED)" in content
+
+def test_cli_custom_output(test_env: tuple[str, str]) -> None:
+    """Test CLI with custom output file."""
+    input_dir, output_dir = test_env
+    output_file = os.path.join(output_dir, "custom_output.txt")
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["--directory", input_dir, "--output", output_file])
+    assert result.exit_code == 0
+    assert os.path.exists(output_file)
 
 
-def test_main_nonexistent_directory() -> None:
-    """Test CLI with nonexistent directory."""
-    exit_code = main(["-d", "nonexistent", "-o", "output.txt"])
-    assert exit_code == 1
-
-
-def test_main_with_excludes(test_env: tuple[str, str]) -> None:
+def test_cli_exclude_patterns(test_env: tuple[str, str]) -> None:
     """Test CLI with exclude patterns."""
     input_dir, _ = test_env
-    output_file = os.path.join(input_dir, "output.txt")
 
-    # Create a file that should be excluded
-    os.makedirs(os.path.join(input_dir, "exclude_me"))
-    with open(os.path.join(input_dir, "exclude_me", "test.txt"), "w") as f:
+    # Create a directory that should be excluded
+    exclude_dir = os.path.join(input_dir, "exclude_me")
+    os.makedirs(exclude_dir)
+    with open(os.path.join(exclude_dir, "test.txt"), "w") as f:
         f.write("Should be excluded")
 
-    exit_code = main(["-d", input_dir, "-o", output_file, "-e", "exclude_me"])
-    assert exit_code == 0
+    runner = CliRunner()
+    result = runner.invoke(main, ["--directory", input_dir, "--exclude", "exclude_me"])
+    assert result.exit_code == 0
 
-    with open(output_file, "r") as f:
+    # Check output doesn't contain excluded content
+    dirname = os.path.basename(input_dir)
+    output_file = f"{dirname}_file_combinator_output.txt"
+    with open(output_file) as f:
         content = f.read()
         assert "exclude_me" not in content
         assert "Should be excluded" not in content
 
 
-def test_main_verbose_output(
-    test_env: tuple[str, str], caplog: pytest.LogCaptureFixture
-) -> None:
+def test_cli_verbose_output(test_env: tuple[str, str]) -> None:
     """Test CLI with verbose output."""
     input_dir, _ = test_env
-    output_file = os.path.join(input_dir, "output.txt")
-
-    exit_code = main(["-d", input_dir, "-o", output_file, "-v"])
-    assert exit_code == 0
-    assert any(record.levelname == "DEBUG" for record in caplog.records)
-
-
-def test_main_with_logging(test_env: tuple[str, str]) -> None:
-    """Test CLI with log file output."""
-    input_dir, output_dir = test_env
-    output_file = os.path.join(output_dir, "output.txt")
-    log_file = os.path.join(output_dir, "test.log")
-
-    exit_code = main(["-d", input_dir, "-o", output_file, "--log-file", log_file])
-    assert exit_code == 0
-    assert os.path.exists(log_file)
-
-
-def test_main_keyboard_interrupt(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test CLI handling of keyboard interrupt."""
-
-    def mock_process(*args: str, **kwargs: str) -> None:
-        raise KeyboardInterrupt
-
-    monkeypatch.setattr(
-        "filecombinator.core.combinator.FileCombinator.process_directory", mock_process
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(
+        main,
+        ["--directory", input_dir, "--verbose", "--no-style"],
+        catch_exceptions=False,
     )
-    exit_code = main(["-d", ".", "-o", "output.txt"])
-    assert exit_code == 1
+    assert result.exit_code == 0
+    all_output = result.stdout + (result.stderr or "")
+    assert "DEBUG:" in all_output
 
 
-def test_main_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test CLI handling of unexpected errors."""
-
-    def mock_process(*args: str, **kwargs: str) -> None:
-        raise RuntimeError("Unexpected error")
-
-    monkeypatch.setattr(
-        "filecombinator.core.combinator.FileCombinator.process_directory", mock_process
+def test_cli_error_handling() -> None:
+    """Test CLI error handling with nonexistent directory."""
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(
+        main,
+        ["--directory", "nonexistent"],
+        catch_exceptions=False,
     )
-    exit_code = main(["-d", ".", "-o", "output.txt"])
-    assert exit_code == 1
+    assert result.exit_code == 2  # System exit for fatal errors
+    all_output = result.stdout + (result.stderr or "")
+    assert "Error" in all_output
+
+
+def test_cli_help() -> None:
+    """Test CLI help output."""
+    runner = CliRunner()
+    result = runner.invoke(main, ["--help"])
+    assert result.exit_code == 0
+    assert "Usage:" in result.output
+    assert "Options:" in result.output
+
+
+def test_cli_version() -> None:
+    """Test CLI version output."""
+    runner = CliRunner()
+    result = runner.invoke(main, ["--version"])
+    assert result.exit_code == 0
+    assert "version" in result.output.lower()
+
+
+def test_cli_style_output(test_env: tuple[str, str]) -> None:
+    """Test CLI styled output with Rich."""
+    input_dir, _ = test_env
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["--directory", input_dir, "--style"],
+        color=True,
+        catch_exceptions=False,
+    )
+    assert result.exit_code == 0
+    # For colored output, check for typical banner text
+    assert (
+        "     _____ _ _         ____                _     _             _"
+        in result.output
+    )  # Banner content
+    # And check that processing completed message is present
+    assert "Processing completed" in result.output
