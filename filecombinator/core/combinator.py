@@ -11,6 +11,7 @@ from typing import Optional, Set
 
 from ..processors.content import ContentProcessor
 from ..processors.directory import DirectoryProcessor
+from .config import get_config
 from .exceptions import FileCombinatorError
 from .logging import setup_logging
 from .models import FileLists, FileStats
@@ -20,23 +21,6 @@ logger = logging.getLogger(__name__)
 
 class FileCombinator:
     """Combines multiple files into a single output file while preserving structure."""
-
-    # Default exclusion patterns
-    DEFAULT_EXCLUDES: Set[str] = {
-        "__pycache__",
-        ".venv",
-        ".git",
-        "node_modules",
-        ".DS_Store",
-        ".pytest_cache",
-        ".vscode",
-        "logs",
-        ".mypy_cache",
-        ".cache",
-        ".pythonlibs",
-        ".local",
-        "gitdiff.txt",
-    }
 
     def __init__(
         self,
@@ -51,9 +35,8 @@ class FileCombinator:
             verbose: Enable verbose logging
             output_file: Path to output file
         """
-        self.exclude_patterns = self.DEFAULT_EXCLUDES.copy()
-        if additional_excludes:
-            self.exclude_patterns.update(additional_excludes)
+        config = get_config(additional_excludes)
+        self.exclude_patterns = config.exclude_patterns
         self.verbose = verbose
         self.output_file = output_file
         self.logger = logging.getLogger("FileCombinator")

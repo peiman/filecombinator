@@ -1,0 +1,26 @@
+# Default configuration for FileCombinator
+
+# Patterns to exclude from processing
+exclude_patterns:
+  - "__pycache__"
+  - ".venv"
+  - ".git"
+  - "node_modules"
+  - ".DS_Store"
+  - ".pytest_cache"
+  - ".vscode"
+  - "logs"
+  - ".mypy_cache"
+  - ".cache"
+  - ".pythonlibs"
+  - ".local"
+  - "gitdiff.txt"
+
+# Logging configuration
+logging:
+  default_log_file: "logs/file_combinator.log"
+  default_level: "INFO"
+
+# Output configuration
+output:
+  file_suffix: "_file_combinator_output.txt"

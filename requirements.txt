@@ -2,3 +2,4 @@
 # Runtime dependencies for FileCombinator project
 
 python-magic>=0.4.27
+PyYAML>=6.0.1
