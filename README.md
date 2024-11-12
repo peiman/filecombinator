@@ -1,7 +1,7 @@
 # FileCombinator
 
 [![PyPI version](https://img.shields.io/pypi/v/filecombinator.svg)](https://pypi.org/project/filecombinator/)
-[![Build Status](https://github.com/peiman/filecombinator/workflows/CI/badge.svg)](https://github.com/peiman/filecombinator/actions)
+[![Build Status](https://github.com/peiman/filecombinator/workflows/Build/badge.svg)](https://github.com/peiman/filecombinator/actions)
 [![Coverage](https://codecov.io/gh/peiman/filecombinator/branch/main/graph/badge.svg)](https://codecov.io/gh/peiman/filecombinator)
 [![License](https://img.shields.io/github/license/peiman/filecombinator.svg)](https://github.com/peiman/filecombinator/blob/main/LICENSE)
 [![Python Versions](https://img.shields.io/pypi/pyversions/filecombinator.svg)](https://pypi.org/project/filecombinator/)
