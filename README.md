@@ -1,11 +1,10 @@
 # FileCombinator
 
-[![PyPI version](https://img.shields.io/pypi/v/<package-name>.svg)](https://pypi.org/project/<package-name>/)
-[![Downloads](https://img.shields.io/pypi/dm/<package-name>.svg)](https://pypi.org/project/<package-name>/)
-[![Build Status](https://github.com/<user>/<repo>/workflows/CI/badge.svg)](https://github.com/<user>/<repo>/actions)
-[![Coverage](https://codecov.io/gh/<user>/<repo>/branch/main/graph/badge.svg)](https://codecov.io/gh/<user>/<repo>)
-[![License](https://img.shields.io/github/license/<user>/<repo>.svg)](https://github.com/<user>/<repo>/blob/main/LICENSE)
-[![Python Versions](https://img.shields.io/pypi/pyversions/<package-name>.svg)](https://pypi.org/project/<package-name>/)
+[![PyPI version](https://img.shields.io/pypi/v/filecombinator.svg)](https://pypi.org/project/filecombinator/)
+[![Build Status](https://github.com/peiman/filecombinator/workflows/CI/badge.svg)](https://github.com/peiman/filecombinator/actions)
+[![Coverage](https://codecov.io/gh/peiman/filecombinator/branch/main/graph/badge.svg)](https://codecov.io/gh/peiman/filecombinator)
+[![License](https://img.shields.io/github/license/peiman/filecombinator.svg)](https://github.com/peiman/filecombinator/blob/main/LICENSE)
+[![Python Versions](https://img.shields.io/pypi/pyversions/filecombinator.svg)](https://pypi.org/project/filecombinator/)
 
 FileCombinator is a Python tool that creates a comprehensive, single-file representation of your codebase, optimized for AI analysis. It preserves directory structure and file content while handling binary files intelligently, making it perfect for sharing your codebase with AI assistants.
 

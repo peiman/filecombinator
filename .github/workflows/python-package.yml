@@ -36,6 +36,13 @@ jobs:
     - name: Test with pytest
       run: |
         pytest tests/ --cov=filecombinator --cov-report=term-missing
+    - name: Generate report for codecov.io
+      run: |
+        pytest --cov --cov-report=xml
+    - name: Upload results to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   publish:
     needs: build
