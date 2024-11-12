@@ -1,7 +1,6 @@
 # tests/core/test_combinator.py
 """Test suite for the core FileCombinator class."""
 
-import logging
 import os
 import tempfile
 from typing import Generator
@@ -89,26 +88,6 @@ def test_process_nonexistent_directory(combinator: FileCombinator) -> None:
     """Test processing a nonexistent directory."""
     with pytest.raises(FileCombinatorError):
         combinator.process_directory("nonexistent", "output.txt")
-
-
-def test_setup_logging() -> None:
-    """Test logging setup."""
-    logger = FileCombinator.setup_logging(verbose=True)
-    assert logger.level == logging.DEBUG
-    assert len(logger.handlers) > 0
-
-
-def test_setup_logging_with_file() -> None:
-    """Test logging setup with file output."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        log_file = os.path.join(tmpdir, "test.log")
-        logger = FileCombinator.setup_logging(log_file, verbose=True)
-
-        assert logger.level == logging.DEBUG
-        assert len(logger.handlers) > 1  # Console and file handlers
-
-        # Verify log file was created
-        assert os.path.exists(log_file)
 
 
 def test_process_directory_with_existing_output(

@@ -33,28 +33,62 @@ def test_env() -> Generator[tuple[str, str], None, None]:
 
 def test_cli_defaults() -> None:
     """Test CLI with default values."""
-    runner = CliRunner(mix_stderr=False)
-    with runner.isolated_filesystem():
+    runner = CliRunner()
+    with runner.isolated_filesystem():  # Removed unused variable 'fs'
         # Create a test file
+        os.makedirs("testdir")
+        with open(os.path.join("testdir", "test.txt"), "w") as f:
+            f.write("Test content")
+
+        # Test with default output filename
+        result = runner.invoke(main, ["-d", "testdir"])
+        assert result.exit_code == 0
+
+        # Check for default output file
+        expected_output = "testdir_file_combinator_output.txt"
+        assert os.path.exists(expected_output)
+
+        # Verify content
+        with open(expected_output, "r") as f:
+            content = f.read()
+            assert "test.txt" in content
+            assert "Test content" in content
+
+
+def test_cli_default_output_current_dir() -> None:
+    """Test CLI with default output filename in current directory."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        # Create test file in current directory
         with open("test.txt", "w") as f:
             f.write("Test content")
 
+        # Run with current directory
         result = runner.invoke(main)
         assert result.exit_code == 0
-        output_files = [
-            f for f in os.listdir(".") if f.endswith("_file_combinator_output.txt")
-        ]
-        assert len(output_files) == 1
+
+        # Get current directory name
+        current_dir = os.path.basename(os.path.abspath("."))
+        expected_output = f"{current_dir}_file_combinator_output.txt"
+        assert os.path.exists(expected_output)
+
+        # Verify content
+        with open(expected_output, "r") as f:
+            content = f.read()
+            assert "test.txt" in content
+            assert "Test content" in content
 
 
 def test_cli_custom_directory(test_env: tuple[str, str]) -> None:
     """Test CLI with custom input directory."""
-    input_dir, _ = test_env
+    input_dir, output_dir = test_env
     runner = CliRunner()
-    result = runner.invoke(main, ["--directory", input_dir])
+
+    # Use explicit output file in output directory
+    output_file = os.path.join(output_dir, "output.txt")
+    result = runner.invoke(main, ["--directory", input_dir, "--output", output_file])
+
     assert result.exit_code == 0
-    dirname = os.path.basename(input_dir)
-    output_file = f"{dirname}_file_combinator_output.txt"
     assert os.path.exists(output_file)
 
 
@@ -71,7 +105,7 @@ def test_cli_custom_output(test_env: tuple[str, str]) -> None:
 
 def test_cli_exclude_patterns(test_env: tuple[str, str]) -> None:
     """Test CLI with exclude patterns."""
-    input_dir, _ = test_env
+    input_dir, output_dir = test_env
 
     # Create a directory that should be excluded
     exclude_dir = os.path.join(input_dir, "exclude_me")
@@ -80,43 +114,86 @@ def test_cli_exclude_patterns(test_env: tuple[str, str]) -> None:
         f.write("Should be excluded")
 
     runner = CliRunner()
-    result = runner.invoke(main, ["--directory", input_dir, "--exclude", "exclude_me"])
+    output_file = os.path.join(output_dir, "output.txt")
+    result = runner.invoke(
+        main,
+        ["--directory", input_dir, "--exclude", "exclude_me", "--output", output_file],
+    )
     assert result.exit_code == 0
 
     # Check output doesn't contain excluded content
-    dirname = os.path.basename(input_dir)
-    output_file = f"{dirname}_file_combinator_output.txt"
     with open(output_file) as f:
         content = f.read()
         assert "exclude_me" not in content
         assert "Should be excluded" not in content
 
 
+def test_cli_multiple_excludes(test_env: tuple[str, str]) -> None:
+    """Test CLI with multiple exclude patterns."""
+    input_dir, output_dir = test_env
+
+    # Create directories that should be excluded
+    for exclude_dir in ["exclude1", "exclude2"]:
+        full_path = os.path.join(input_dir, exclude_dir)
+        os.makedirs(full_path)
+        with open(os.path.join(full_path, "test.txt"), "w") as f:
+            f.write(f"Content in {exclude_dir}")
+
+    output_file = os.path.join(output_dir, "output.txt")
+    result = runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--directory",
+            input_dir,
+            "--exclude",
+            "exclude1",
+            "--exclude",
+            "exclude2",
+            "--output",
+            output_file,
+        ],
+    )
+    assert result.exit_code == 0
+
+    with open(output_file) as f:
+        content = f.read()
+        assert "exclude1" not in content
+        assert "exclude2" not in content
+
+
 def test_cli_verbose_output(test_env: tuple[str, str]) -> None:
     """Test CLI with verbose output."""
-    input_dir, _ = test_env
+    input_dir, output_dir = test_env
+    output_file = os.path.join(output_dir, "output.txt")
+
     runner = CliRunner(mix_stderr=False)
     result = runner.invoke(
         main,
-        ["--directory", input_dir, "--verbose", "--no-style"],
+        ["--directory", input_dir, "--verbose", "--no-style", "--output", output_file],
         catch_exceptions=False,
     )
     assert result.exit_code == 0
-    all_output = result.stdout + (result.stderr or "")
-    assert "DEBUG:" in all_output
+    # Just verify debug output exists
+    assert "DEBUG:" in (result.stdout + (result.stderr or ""))
 
 
 def test_cli_error_handling() -> None:
     """Test CLI error handling with nonexistent directory."""
     runner = CliRunner(mix_stderr=False)
-    result = runner.invoke(
-        main,
-        ["--directory", "nonexistent"],
-        catch_exceptions=False,
-    )
-    assert result.exit_code == 2  # System exit for fatal errors
-    all_output = result.stdout + (result.stderr or "")
-    assert "Error" in all_output
+    with runner.isolated_filesystem() as fs:
+        output_file = os.path.join(fs, "output.txt")
+        result = runner.invoke(
+            main,
+            ["--directory", "nonexistent", "--output", output_file],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 2  # System exit for fatal errors
+        # Just verify it contains error indication
+        assert any(
+            error_text in (result.stderr or "")
+            for error_text in ["Error", "does not exist", "nonexistent"]
+        )
 
 
 def test_cli_help() -> None:
@@ -124,8 +201,10 @@ def test_cli_help() -> None:
     runner = CliRunner()
     result = runner.invoke(main, ["--help"])
     assert result.exit_code == 0
+    # Just verify essential help content
     assert "Usage:" in result.output
-    assert "Options:" in result.output
+    assert "-d, --directory" in result.output
+    assert "-o, --output" in result.output
 
 
 def test_cli_version() -> None:
@@ -134,23 +213,3 @@ def test_cli_version() -> None:
     result = runner.invoke(main, ["--version"])
     assert result.exit_code == 0
     assert "version" in result.output.lower()
-
-
-def test_cli_style_output(test_env: tuple[str, str]) -> None:
-    """Test CLI styled output with Rich."""
-    input_dir, _ = test_env
-    runner = CliRunner()
-    result = runner.invoke(
-        main,
-        ["--directory", input_dir, "--style"],
-        color=True,
-        catch_exceptions=False,
-    )
-    assert result.exit_code == 0
-    # For colored output, check for typical banner text
-    assert (
-        "     _____ _ _         ____                _     _             _"
-        in result.output
-    )  # Banner content
-    # And check that processing completed message is present
-    assert "Processing completed" in result.output

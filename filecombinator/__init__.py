@@ -15,11 +15,11 @@ from .core.models import FileLists, FileStats
 try:
     # First, try to get version from installed package
     __version__ = importlib.metadata.version("filecombinator")
-except importlib.metadata.PackageNotFoundError:
+except importlib.metadata.PackageNotFoundError:  # pragma: no cover
     try:
         # If not installed, try to get version from setuptools_scm
         from ._version import version as __version__  # noqa
-    except ImportError:
+    except ImportError:  # pragma: no cover
         # If running from source without setuptools_scm installed
         __version__ = "0.0.0.dev0"
 

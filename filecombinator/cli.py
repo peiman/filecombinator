@@ -76,7 +76,7 @@ def display_banner(style: bool = True) -> None:
 @click.option(
     "-o",
     "--output",
-    help="Output file name (default: <directory_name>_file_combinator_output.txt)",
+    help="Output file path (default: <directory_name>_file_combinator_output.txt)",
     type=click.Path(dir_okay=False),
 )
 @click.option(
@@ -110,17 +110,18 @@ def main(
         # Display banner
         display_banner(style)
 
+        # Determine output file name if not provided
+        if not output:
+            dir_name = os.path.basename(os.path.abspath(directory))
+            output = f"{dir_name}_file_combinator_output.txt"
+            logger.debug("Using default output filename: %s", output)
+
         # Initialize FileCombinator
         combinator = FileCombinator(
             additional_excludes=set(exclude) if exclude else None,
             verbose=verbose,
             output_file=output,
         )
-
-        # Determine output file name if not provided
-        if not output:
-            dir_name = os.path.basename(os.path.abspath(directory))
-            output = f"{dir_name}_file_combinator_output.txt"
 
         # Confirm overwrite if file exists
         if os.path.exists(output) and sys.stdin.isatty():

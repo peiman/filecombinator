@@ -23,19 +23,26 @@ def setup_logging(
         os.makedirs(os.path.dirname(log_file), exist_ok=True)
 
     logger = logging.getLogger("FileCombinator")
-    logger.setLevel(logging.DEBUG)
-    logger.handlers = []  # Clear any existing handlers
+    # Set level based on verbose flag
+    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
 
+    # Clear any existing handlers
+    logger.handlers = []
+
+    # Create formatters
     detailed_formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     simple_formatter = logging.Formatter("%(levelname)s: %(message)s")
 
+    # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(simple_formatter)
-    console_handler.setLevel(logging.INFO if not verbose else logging.DEBUG)
+    # Set handler level based on verbose flag
+    console_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
     logger.addHandler(console_handler)
 
+    # File handler if log_file is specified
     if log_file:
         file_handler = RotatingFileHandler(
             log_file,
@@ -44,6 +51,7 @@ def setup_logging(
             encoding="utf-8",
         )
         file_handler.setFormatter(detailed_formatter)
+        # Always set file handler to DEBUG to capture all logs
         file_handler.setLevel(logging.DEBUG)
         logger.addHandler(file_handler)
 

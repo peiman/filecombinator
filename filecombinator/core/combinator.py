@@ -1,11 +1,14 @@
 # filecombinator/core/combinator.py
 """Core FileCombinator class implementation."""
 
+import atexit
+import contextlib
 import logging
 import os
 import shutil
 import tempfile
 import time
+import weakref
 from pathlib import Path
 from typing import Optional, Set
 
@@ -13,10 +16,51 @@ from ..processors.content import ContentProcessor
 from ..processors.directory import DirectoryProcessor
 from .config import get_config
 from .exceptions import FileCombinatorError
-from .logging import setup_logging
 from .models import FileLists, FileStats
 
 logger = logging.getLogger(__name__)
+
+
+class TempFileManager:
+    """Manages temporary files with proper cleanup."""
+
+    def __init__(self) -> None:
+        """Initialize the temporary file manager."""
+        self._temp_files: Set[str] = set()
+        # Register cleanup on garbage collection
+        weakref.finalize(self, self.cleanup_all)
+
+    def register(self, filepath: str) -> None:
+        """Register a temporary file for cleanup.
+
+        Args:
+            filepath: Path to the temporary file
+        """
+        self._temp_files.add(filepath)
+
+    def unregister(self, filepath: str) -> None:
+        """Unregister a temporary file from cleanup.
+
+        Args:
+            filepath: Path to the temporary file
+        """
+        self._temp_files.discard(filepath)
+
+    def cleanup_all(self) -> None:
+        """Clean up all registered temporary files."""
+        for filepath in list(self._temp_files):
+            with contextlib.suppress(OSError):
+                if os.path.exists(filepath):
+                    os.unlink(filepath)
+                    self._temp_files.discard(filepath)
+                    logger.debug("Cleaned up temporary file: %s", filepath)
+
+
+# Global temporary file manager
+_temp_manager = TempFileManager()
+
+# Register cleanup on program exit
+atexit.register(_temp_manager.cleanup_all)
 
 
 class FileCombinator:
@@ -49,13 +93,6 @@ class FileCombinator:
         self.start_time: Optional[float] = None
 
     @staticmethod
-    def setup_logging(
-        log_file: Optional[str] = None, verbose: bool = False
-    ) -> logging.Logger:
-        """Set up logging configuration."""
-        return setup_logging(log_file, verbose)
-
-    @staticmethod
     def display_banner() -> None:
         """Display the application banner."""
         from .banner import get_banner
@@ -79,22 +116,23 @@ class FileCombinator:
         self.output_file = output_path
         self.directory_processor.output_file = output_path
 
-        temp_fd = None
-        temp_name = None
+        # Use a with block for better cleanup handling
+        with tempfile.NamedTemporaryFile(
+            mode="w+",
+            suffix="_file_combinator_output.txt",
+            delete=False,
+            encoding="utf-8",
+        ) as temp_file:
+            temp_name = temp_file.name
+            _temp_manager.register(temp_name)
 
-        try:
-            # Create a temporary file securely
-            temp_fd, temp_name = tempfile.mkstemp(suffix=".txt")
-            os.close(temp_fd)  # Close the file descriptor
-
-            # Ensure output directory exists
-            output_dir = os.path.dirname(os.path.abspath(output_path))
-            if output_dir:
-                os.makedirs(output_dir, exist_ok=True)
-
-            # Open the temporary file for writing
-            with open(temp_name, "w", encoding="utf-8") as temp_file:
+            try:
                 self.logger.debug("Created temporary file: %s", temp_name)
+
+                # Ensure output directory exists
+                output_dir = os.path.dirname(os.path.abspath(output_path))
+                if output_dir:
+                    os.makedirs(output_dir, exist_ok=True)
 
                 # Generate directory tree
                 self.directory_processor.generate_tree(directory, temp_file)
@@ -107,8 +145,18 @@ class FileCombinator:
                     ),
                 )
 
+                # Ensure all content is written
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+
+            except Exception as e:
+                self.logger.error("Fatal error during processing: %s", e)
+                raise FileCombinatorError(f"Failed to process directory: {e}") from e
+
+        try:
             # Move temporary file to final location
             shutil.move(temp_name, output_path)
+            _temp_manager.unregister(temp_name)
 
             # Print processing summary
             duration = time.time() - self.start_time
@@ -119,15 +167,8 @@ class FileCombinator:
             self._print_excluded_files()
 
         except Exception as e:
-            self.logger.error("Fatal error during processing: %s", e)
-            raise FileCombinatorError(f"Failed to process directory: {e}") from e
-        finally:
-            # Clean up temporary file if it still exists
-            if temp_name and os.path.exists(temp_name):
-                try:
-                    os.unlink(temp_name)
-                except OSError:
-                    pass  # Ignore cleanup errors
+            self.logger.error("Error finalizing output: %s", e)
+            raise FileCombinatorError(f"Failed to finalize output: {e}") from e
 
     def _log_statistics(self, output_path: str) -> None:
         """Log processing statistics.

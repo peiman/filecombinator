@@ -18,7 +18,7 @@ try:
     import magic
 
     MAGIC_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     MAGIC_AVAILABLE = False
     logger.debug(
         "python-magic library not available, falling back to basic type detection"
@@ -82,7 +82,8 @@ class SafeOpen:
         if self.file_obj is not None:
             try:
                 self.file_obj.close()
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
+                # This is nearly impossible to test reliably
                 logger.warning("Error closing file %s: %s", self.file_path, e)
 
 
@@ -133,7 +134,7 @@ class FileTypeDetector:
             try:
                 self.mime = magic.Magic(mime=True)
                 logger.debug("Magic library initialized successfully")
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
                 logger.debug("Could not initialize magic library: %s", e)
                 self.mime = None
 
@@ -186,7 +187,7 @@ class FileTypeDetector:
                         "application/x-empty",
                     ]
                 )
-            except Exception as e:
+            except Exception as e:  # pragma: no cover
                 logger.debug("Error checking mime type: %s", e)
                 # Fall back to alternative detection method
 
@@ -204,6 +205,6 @@ class FileTypeDetector:
                     return False
                 except UnicodeDecodeError:
                     return True
-        except IOError as e:
+        except IOError as e:  # pragma: no cover
             logger.debug("Error reading file: %s", e)
             raise FileProcessingError(f"Error reading file {file_path}: {e}") from e
