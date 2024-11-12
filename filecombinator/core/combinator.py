@@ -75,14 +75,9 @@ class FileCombinator:
     @staticmethod
     def display_banner() -> None:
         """Display the application banner."""
-        banner = r"""
-     _____ _ _         ____                _     _             _
-    |  ___(_) | ___   / ___|___  _ __ ___ | |__ (_)_ __   __ _| |_ ___  _ __
-    | |_  | | |/ _ \ | |   / _ \| '_ ` _ \| '_ \| | '_ \ / _` | __/ _ \| '__|
-    |  _| | | |  __/ | |__| (_) | | | | | | |_) | | | | | (_| | || (_) | |
-    |_|   |_|_|\___|  \____\___/|_| |_| |_|_.__/|_|_| |_|\__,_|\__\___/|_|
-    """
-        print(banner)
+        from .banner import get_banner
+
+        print(get_banner())
 
     def process_directory(self, directory: str | Path, output_path: str) -> None:
         """Process a directory and combine its contents.
