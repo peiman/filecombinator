@@ -106,7 +106,7 @@ logging:
   default_level: "INFO"
 
 output:
-  file_suffix: "_file_combinator_output.txt"
+  file_suffix: "_file_combinator_output.md"
 ```
 
 ## Development
