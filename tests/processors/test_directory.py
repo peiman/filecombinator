@@ -169,3 +169,68 @@ def test_generate_tree_error(processor: DirectoryProcessor) -> None:
     """Test tree generation with nonexistent directory."""
     with pytest.raises(DirectoryProcessingError):
         processor.generate_tree("nonexistent_directory")
+
+
+def test_process_directory_error_processing_file(tmp_path: Path) -> None:
+    """Test handling of errors during file processing."""
+    # Create a processor
+    processor = DirectoryProcessor(set())
+
+    # Create a test file
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("test content")
+
+    # Create a callback that raises an error
+    def failing_callback(file_path: str) -> None:
+        raise OSError("Test error processing file")
+
+    # Ensure the error is propagated properly
+    with pytest.raises(DirectoryProcessingError) as exc_info:
+        processor.process_directory(str(tmp_path), failing_callback)
+
+    assert "Test error processing file" in str(exc_info.value)
+    assert "Failed to process directory" in str(exc_info.value)
+
+
+def test_process_directory_with_subdirectories(tmp_path: Path) -> None:
+    """Test processing directory with subdirectories and files."""
+    # Create a test directory structure
+    subdir = tmp_path / "subdir"
+    subdir.mkdir()
+
+    (tmp_path / "file1.txt").write_text("test1")
+    (subdir / "file2.txt").write_text("test2")
+
+    # Track processed files
+    processed_files = []
+
+    def callback(file_path: str) -> None:
+        processed_files.append(os.path.basename(file_path))
+
+    # Process directory
+    processor = DirectoryProcessor(set())
+    processor.process_directory(str(tmp_path), callback)
+
+    # Verify both files were processed in sorted order
+    assert processed_files == ["file1.txt", "file2.txt"]
+
+
+def test_process_directory_with_empty_subdirectories(tmp_path: Path) -> None:
+    """Test processing directory with empty subdirectories."""
+    # Create empty subdirectories
+    (tmp_path / "empty1").mkdir()
+    (tmp_path / "empty2").mkdir()
+
+    # Add one file to make sure processing happens
+    (tmp_path / "test.txt").write_text("test")
+
+    processed_files = []
+
+    def callback(file_path: str) -> None:
+        processed_files.append(os.path.basename(file_path))
+
+    processor = DirectoryProcessor(set())
+    processor.process_directory(str(tmp_path), callback)
+
+    # Only the text file should be processed
+    assert processed_files == ["test.txt"]

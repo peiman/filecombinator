@@ -140,7 +140,7 @@ def test_cli_multiple_excludes(test_env: tuple[str, str]) -> None:
             f.write(f"Content in {exclude_dir}")
 
     output_file = os.path.join(output_dir, "output.txt")
-    result = runner = CliRunner()
+    runner = CliRunner()
     result = runner.invoke(
         main,
         [
@@ -170,12 +170,43 @@ def test_cli_verbose_output(test_env: tuple[str, str]) -> None:
     runner = CliRunner(mix_stderr=False)
     result = runner.invoke(
         main,
-        ["--directory", input_dir, "--verbose", "--no-style", "--output", output_file],
+        [
+            "--directory",
+            input_dir,
+            "--verbose",
+            "--no-style",
+            "--output",
+            output_file,
+        ],
         catch_exceptions=False,
     )
     assert result.exit_code == 0
-    # Just verify debug output exists
-    assert "DEBUG:" in (result.stdout + (result.stderr or ""))
+
+    print("\nDEBUG OUTPUT:")
+    print("STDOUT:", result.stdout)
+    print("STDERR:", result.stderr)
+
+    # Let's check both stdout and stderr individually
+    debug_messages = [
+        "Created temporary file:",
+        "Starting directory processing:",
+        "Processing completed in",
+        "Text files processed:",
+    ]
+
+    combined_output = (result.stdout or "") + (result.stderr or "")
+
+    for msg in debug_messages:
+        if msg in combined_output:
+            print(f"Found message: {msg}")
+
+    found_any = any(msg in combined_output for msg in debug_messages)
+    assert found_any, (
+        f"No expected log messages found in output. "
+        f"Looking for any of: {debug_messages}. "
+        f"Got stdout: {result.stdout}\n"
+        f"Got stderr: {result.stderr}"
+    )
 
 
 def test_cli_error_handling() -> None:

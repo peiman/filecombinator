@@ -83,7 +83,6 @@ class SafeOpen:
             try:
                 self.file_obj.close()
             except Exception as e:  # pragma: no cover
-                # This is nearly impossible to test reliably
                 logger.warning("Error closing file %s: %s", self.file_path, e)
 
 
@@ -172,12 +171,17 @@ class FileTypeDetector:
         if not os.path.exists(file_path):
             raise FileProcessingError(f"File does not exist: {file_path}")
 
+        # Empty files are treated as text files
+        if os.path.getsize(file_path) == 0:
+            return False
+
         if Path(file_path).suffix.lower() in self.BINARY_EXTENSIONS:
             return True
 
         if self.mime:
             try:
                 mime_type = self.mime.from_file(str(file_path))
+                # Treat standard text formats as non-binary
                 return not any(
                     mime_type.startswith(prefix)
                     for prefix in [
