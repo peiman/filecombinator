@@ -14,6 +14,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from . import __version__
 from .core.banner import get_banner
 from .core.combinator import FileCombinator
+from .core.config import get_config
 from .core.console import (
     create_file_table,
     create_stats_panel,
@@ -113,7 +114,7 @@ def display_summary(
 @click.option(
     "-o",
     "--output",
-    help="Output file path (default: <directory_name>_file_combinator_output.txt)",
+    help="Output file path (default: <directory_name><configured_suffix>)",
     type=click.Path(dir_okay=False),
 )
 @click.option(
@@ -148,11 +149,20 @@ def main(
         if style:
             print_banner(get_banner())
 
+        # Get configured suffix
+        config = get_config()
+        suffix = config.output_suffix
+
         # Determine output file name if not provided
         if not output:
             dir_name = os.path.basename(os.path.abspath(directory))
-            output = f"{dir_name}_file_combinator_output.txt"
+            output = f"{dir_name}{suffix}"
             logger.debug("Using default output filename: %s", output)
+        else:
+            # If output is provided without an extension, add the configured suffix
+            if not os.path.splitext(output)[1]:
+                output = f"{output}{suffix}"
+                logger.debug("Added configured suffix to output: %s", output)
 
         # Initialize FileCombinator
         combinator = FileCombinator(

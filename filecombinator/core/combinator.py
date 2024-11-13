@@ -112,7 +112,7 @@ class FileCombinator:
 
         with tempfile.NamedTemporaryFile(
             mode="w+",
-            suffix="_file_combinator_output.md",
+            suffix=get_config().output_suffix,  # Use configured suffix for temp files
             delete=False,
             encoding="utf-8",
         ) as temp_file:

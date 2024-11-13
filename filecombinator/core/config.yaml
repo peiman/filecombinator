@@ -23,4 +23,4 @@ logging:
 
 # Output configuration
 output:
-  file_suffix: "_file_combinator_output.txt"
+  file_suffix: "_file_combinator_output.md"

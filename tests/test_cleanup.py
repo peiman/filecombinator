@@ -11,6 +11,13 @@ from click.testing import CliRunner
 
 from filecombinator.cli import main
 from filecombinator.core.combinator import _temp_manager
+from filecombinator.core.config import get_config
+
+
+@pytest.fixture
+def config_suffix() -> str:
+    """Get the configured output file suffix."""
+    return get_config().output_suffix
 
 
 @pytest.fixture(autouse=True)
@@ -21,10 +28,9 @@ def cleanup_temp_files() -> Generator[None, None, None]:
 
     # Record initial state of temp directory
     temp_dir = tempfile.gettempdir()
+    suffix = get_config().output_suffix
     before_test = {
-        os.path.join(temp_dir, f)
-        for f in os.listdir(temp_dir)
-        if "_file_combinator_output" in f
+        os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if suffix in f
     }
 
     yield
@@ -42,9 +48,7 @@ def cleanup_temp_files() -> Generator[None, None, None]:
 
     # Check for any new temporary files
     after_test = {
-        os.path.join(temp_dir, f)
-        for f in os.listdir(temp_dir)
-        if "_file_combinator_output" in f
+        os.path.join(temp_dir, f) for f in os.listdir(temp_dir) if suffix in f
     }
 
     new_files = after_test - before_test
@@ -59,7 +63,7 @@ def cleanup_temp_files() -> Generator[None, None, None]:
         pytest.fail(f"Found uncleaned temporary files: {new_files}")
 
 
-def test_cli_no_temp_files() -> None:
+def test_cli_no_temp_files(config_suffix: str) -> None:
     """Test that CLI execution doesn't leave temporary files."""
     runner = CliRunner()
 
@@ -69,13 +73,13 @@ def test_cli_no_temp_files() -> None:
         test_file.write_text("Test content")
 
         # Run with explicit output file to avoid default naming
-        result = runner.invoke(main, ["-d", ".", "-o", "output.txt"])
+        result = runner.invoke(main, ["-d", ".", "-o", "output" + config_suffix])
         assert result.exit_code == 0
 
         # Check files in the directory
         files = set(os.listdir(fs))
         temp_files = {
-            f for f in files if "_file_combinator_output" in f and f != "output.txt"
+            f for f in files if config_suffix in f and f != "output" + config_suffix
         }
         assert not temp_files, f"Found temporary files: {temp_files}"
 
@@ -89,13 +93,14 @@ def test_cli_cleanup_after_error() -> None:
         assert result.exit_code == 2  # Should fail
 
         # Check for any temporary files
-        temp_files = [f for f in os.listdir(fs) if "_file_combinator_output" in f]
+        temp_files = [f for f in os.listdir(fs) if get_config().output_suffix in f]
         assert not temp_files, f"Found temporary files after error: {temp_files}"
 
 
 def test_multiple_instances() -> None:
     """Test that multiple FileCombinator instances don't interfere with each other."""
     runner = CliRunner()
+    config_suffix = get_config().output_suffix
 
     with runner.isolated_filesystem() as fs:
         # Create test files
@@ -103,7 +108,7 @@ def test_multiple_instances() -> None:
             Path(f"test{i}.txt").write_text(f"Test content {i}")
 
         # Run multiple instances with explicit output files
-        output_files = [f"output{i}.txt" for i in range(3)]
+        output_files = [f"output{i}{config_suffix}" for i in range(3)]
         results = [
             runner.invoke(main, ["-d", ".", "-o", output_file])
             for output_file in output_files
@@ -114,9 +119,7 @@ def test_multiple_instances() -> None:
 
         # Only our explicit output files should remain
         files = set(os.listdir(fs))
-        temp_files = {
-            f for f in files if "_file_combinator_output" in f and f not in output_files
-        }
+        temp_files = {f for f in files if config_suffix in f and f not in output_files}
         assert not temp_files, f"Found temporary files: {temp_files}"
 
 
