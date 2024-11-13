@@ -1,6 +1,7 @@
 # tests/processors/test_directory.py
 """Test suite for DirectoryProcessor."""
 
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -10,6 +11,8 @@ import pytest
 
 from filecombinator.core.exceptions import DirectoryProcessingError
 from filecombinator.processors.directory import DirectoryProcessor
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture
@@ -95,26 +98,74 @@ def test_generate_tree(
     processor: DirectoryProcessor, test_directory: dict[str, Any]
 ) -> None:
     """Test directory tree generation."""
+    tree_content = processor.generate_tree(test_directory["path"])
 
-    class MockFile:
-        def __init__(self) -> None:
-            self.content: list[str] = []
+    # Verify tree structure
+    assert "test1.txt" in tree_content
+    assert "subdir" in tree_content
+    assert "__pycache__" not in tree_content
+    assert ".git" not in tree_content
 
-        def write(self, text: str) -> None:
-            self.content.append(text)
+    # Verify tree formatting
+    assert "├── " in tree_content or "└── " in tree_content
+    assert "│   " in tree_content
 
-    mock_file = MockFile()
-    processor.generate_tree(test_directory["path"], mock_file)
 
-    content = "".join(mock_file.content)
-    assert "DIRECTORY STRUCTURE" in content
-    assert "test1.txt" in content
-    assert "subdir" in content
-    assert "__pycache__" not in content
-    assert ".git" not in content
+def test_generate_tree_empty_directory() -> None:
+    """Test tree content generation with empty directory."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        processor = DirectoryProcessor(set())
+        tree_content = processor.generate_tree(tmpdir)
+        assert tree_content == ""
+
+
+def test_generate_tree_single_file() -> None:
+    """Test tree content generation with a single file."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create a single test file
+        test_file = os.path.join(tmpdir, "test.txt")
+        with open(test_file, "w") as f:
+            f.write("test")
+
+        processor = DirectoryProcessor(set())
+        tree_content = processor.generate_tree(tmpdir)
+        assert "└── test.txt" in tree_content
+
+
+def test_generate_tree_nested_directories() -> None:
+    """Test tree content generation with nested directories."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Create nested directory structure with multiple paths to force vertical lines
+        os.makedirs(os.path.join(tmpdir, "dir1", "dir2"))
+        os.makedirs(os.path.join(tmpdir, "dir1", "dir3"))  # Add sibling directory
+
+        # Add files in different directories
+        with open(os.path.join(tmpdir, "dir1", "dir2", "test1.txt"), "w") as f:
+            f.write("test1")
+        with open(os.path.join(tmpdir, "dir1", "dir3", "test2.txt"), "w") as f:
+            f.write("test2")
+
+        processor = DirectoryProcessor(set())
+        tree_content = processor.generate_tree(tmpdir)
+
+        # Output should look like:
+        # tmpXXX
+        # └── dir1
+        #     ├── dir2
+        #     │   └── test1.txt
+        #     └── dir3
+        #         └── test2.txt
+
+        assert "dir1" in tree_content
+        assert "dir2" in tree_content
+        assert "dir3" in tree_content
+        assert "test1.txt" in tree_content
+        assert "test2.txt" in tree_content
+        assert "├── " in tree_content  # Has branching
+        assert "│   " in tree_content  # Has vertical line
 
 
 def test_generate_tree_error(processor: DirectoryProcessor) -> None:
-    """Test tree generation with invalid directory."""
+    """Test tree generation with nonexistent directory."""
     with pytest.raises(DirectoryProcessingError):
-        processor.generate_tree("nonexistent_directory", None)
+        processor.generate_tree("nonexistent_directory")

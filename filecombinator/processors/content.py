@@ -5,7 +5,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict, TextIO
 
 from ..core.exceptions import FileProcessingError
 from ..core.file_utils import FileTypeDetector, SafeOpen
@@ -23,7 +23,7 @@ class ContentProcessor:
         self._stats = FileStats()
         self._files = FileLists()
 
-    def get_file_info(self, file_path: str | Path) -> Dict[str, Any]:
+    def get_file_info(self, file_path: str | Path) -> Dict[str, str]:
         """Get file information including size, modification time, and type.
 
         Args:
@@ -44,7 +44,7 @@ class ContentProcessor:
                 file_type = "Image"
 
             return {
-                "size": stat.st_size,
+                "size": str(stat.st_size),
                 "modified": datetime.fromtimestamp(stat.st_mtime).strftime(
                     "%Y-%m-%d %H:%M:%S"
                 ),
@@ -54,7 +54,7 @@ class ContentProcessor:
             logger.error("Error getting file info for %s: %s", file_path, e)
             raise FileProcessingError(f"Failed to get file info: {e}") from e
 
-    def process_file(self, file_path: str | Path, output_file: Any) -> None:
+    def process_file(self, file_path: str | Path, output_file: TextIO) -> None:
         """Process a single file and write its content to output.
 
         Args:
@@ -117,6 +117,33 @@ class ContentProcessor:
             logger.error("Error processing %s: %s", file_path, e)
             self._increment_stat("skipped")
             raise FileProcessingError(f"Failed to process file: {e}") from e
+
+    def track_file(self, file_path: str | Path) -> None:
+        """Track a file for statistics without processing its content.
+
+        Args:
+            file_path: Path to the file to track
+        """
+        try:
+            # Check if file exists
+            if not os.path.exists(file_path):
+                logger.error("File does not exist: %s", file_path)
+                self._increment_stat("skipped")
+                return
+
+            # Detect file type and track accordingly
+            if self.file_type_detector.is_binary_file(file_path):
+                self._increment_stat("binary")
+                self._add_file("binary", str(file_path))
+            elif self.file_type_detector.is_image_file(file_path):
+                self._increment_stat("image")
+                self._add_file("image", str(file_path))
+            else:
+                self._increment_stat("processed")
+                self._add_file("text", str(file_path))
+        except Exception as e:
+            logger.error("Error tracking file %s: %s", file_path, e)
+            self._increment_stat("skipped")
 
     def _increment_stat(self, stat_name: str) -> None:
         """Increment a statistics counter.

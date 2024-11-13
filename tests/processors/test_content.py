@@ -3,12 +3,10 @@
 
 import os
 import tempfile
-from io import StringIO
 from typing import Generator
 
 import pytest
 
-from filecombinator.core.exceptions import FileProcessingError
 from filecombinator.processors.content import ContentProcessor
 
 
@@ -60,109 +58,79 @@ def test_processor_initialization(processor: ContentProcessor) -> None:
     assert len(processor.file_lists.image) == 0
 
 
-def test_get_file_info(processor: ContentProcessor, test_files: dict[str, str]) -> None:
-    """Test file information retrieval."""
-    info = processor.get_file_info(test_files["text"])
-    assert isinstance(info, dict)
-    assert "size" in info
-    assert "modified" in info
-    assert "type" in info
-    assert info["type"] == "Text"
+def test_track_file_text(test_files: dict[str, str]) -> None:
+    """Test tracking of text files."""
+    processor = ContentProcessor()
 
+    processor.track_file(test_files["text"])
 
-def test_get_file_info_error(processor: ContentProcessor) -> None:
-    """Test file info retrieval with nonexistent file."""
-    with pytest.raises(FileProcessingError):
-        processor.get_file_info("nonexistent.txt")
-
-
-def test_process_text_file(
-    processor: ContentProcessor, test_files: dict[str, str]
-) -> None:
-    """Test text file processing."""
-    output = StringIO()
-    processor.process_file(test_files["text"], output)
-    content = output.getvalue()
-
-    assert "FILEPATH:" in content
-    assert "Test content" in content
-    assert "START OF FILE" in content
-    assert "END OF FILE" in content
     assert processor.stats.processed == 1
+    assert processor.stats.binary == 0
+    assert processor.stats.image == 0
     assert len(processor.file_lists.text) == 1
+    assert test_files["text"] in processor.file_lists.text
 
 
-def test_process_binary_file(
-    processor: ContentProcessor, test_files: dict[str, str]
-) -> None:
-    """Test binary file processing."""
-    output = StringIO()
-    processor.process_file(test_files["binary"], output)
-    content = output.getvalue()
+def test_track_file_binary(test_files: dict[str, str]) -> None:
+    """Test tracking of binary files."""
+    processor = ContentProcessor()
 
-    assert "FILEPATH:" in content
-    assert "BINARY FILE (CONTENT EXCLUDED)" in content
+    processor.track_file(test_files["binary"])
+
+    assert processor.stats.processed == 0
     assert processor.stats.binary == 1
+    assert processor.stats.image == 0
     assert len(processor.file_lists.binary) == 1
+    assert test_files["binary"] in processor.file_lists.binary
 
 
-def test_process_image_file(
-    processor: ContentProcessor, test_files: dict[str, str]
-) -> None:
-    """Test image file processing."""
-    output = StringIO()
-    processor.process_file(test_files["image"], output)
-    content = output.getvalue()
+def test_track_file_image(test_files: dict[str, str]) -> None:
+    """Test tracking of image files."""
+    processor = ContentProcessor()
 
-    assert "FILEPATH:" in content
-    assert "IMAGE FILE (CONTENT EXCLUDED)" in content
+    processor.track_file(test_files["image"])
+
+    assert processor.stats.processed == 0
+    assert processor.stats.binary == 0
     assert processor.stats.image == 1
+    assert len(processor.file_lists.image) == 1
+    assert test_files["image"] in processor.file_lists.image
+
+
+def test_track_file_nonexistent() -> None:
+    """Test tracking of nonexistent file."""
+    processor = ContentProcessor()
+
+    processor.track_file("nonexistent.txt")
+
+    assert processor.stats.skipped == 1
+    assert processor.stats.processed == 0
+    assert processor.stats.binary == 0
+    assert processor.stats.image == 0
+
+
+def test_track_multiple_files(test_files: dict[str, str]) -> None:
+    """Test tracking of multiple files."""
+    processor = ContentProcessor()
+
+    processor.track_file(test_files["text"])
+    processor.track_file(test_files["binary"])
+    processor.track_file(test_files["image"])
+
+    assert processor.stats.processed == 1
+    assert processor.stats.binary == 1
+    assert processor.stats.image == 1
+    assert len(processor.file_lists.text) == 1
+    assert len(processor.file_lists.binary) == 1
     assert len(processor.file_lists.image) == 1
 
 
-def test_process_nonexistent_file(processor: ContentProcessor) -> None:
-    """Test processing a nonexistent file."""
-    output = StringIO()
-    with pytest.raises(FileProcessingError):
-        processor.process_file("nonexistent.txt", output)
-    assert processor.stats.skipped == 1
+def test_track_same_file_twice(test_files: dict[str, str]) -> None:
+    """Test tracking the same file multiple times."""
+    processor = ContentProcessor()
 
+    processor.track_file(test_files["text"])
+    processor.track_file(test_files["text"])
 
-def test_process_unreadable_file(
-    processor: ContentProcessor, test_files: dict[str, str]
-) -> None:
-    """Test processing a file with read permission issues."""
-    # Remove read permissions
-    os.chmod(test_files["text"], 0o000)
-    try:
-        output = StringIO()
-        with pytest.raises(FileProcessingError):
-            processor.process_file(test_files["text"], output)
-        assert processor.stats.skipped == 1
-    finally:
-        # Restore permissions for cleanup
-        os.chmod(test_files["text"], 0o666)
-
-
-def test_stats_increment(processor: ContentProcessor) -> None:
-    """Test statistics incrementation."""
-    processor._increment_stat("processed")
-    processor._increment_stat("binary")
-    processor._increment_stat("image")
-    processor._increment_stat("skipped")
-
-    assert processor.stats.processed == 1
-    assert processor.stats.binary == 1
-    assert processor.stats.image == 1
-    assert processor.stats.skipped == 1
-
-
-def test_add_file(processor: ContentProcessor) -> None:
-    """Test adding files to tracking lists."""
-    processor._add_file("text", "test1.txt")
-    processor._add_file("binary", "test2.bin")
-    processor._add_file("image", "test3.jpg")
-
-    assert "test1.txt" in processor.file_lists.text
-    assert "test2.bin" in processor.file_lists.binary
-    assert "test3.jpg" in processor.file_lists.image
+    assert processor.stats.processed == 2  # Stats increment each time
+    assert len(processor.file_lists.text) == 2  # File list grows

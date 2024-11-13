@@ -3,5 +3,5 @@ include README.md
 include requirements.txt
 recursive-include filecombinator/core *.yaml
 recursive-include filecombinator/core *.txt
-recursive-include filecombinator/core/templates *.j2
+recursive-include filecombinator/core/templates *.md
 include filecombinator/py.typed

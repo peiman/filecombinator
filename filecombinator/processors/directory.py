@@ -4,18 +4,26 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any, Callable, Set
+from typing import Protocol
 
 from ..core.exceptions import DirectoryProcessingError
 
 logger = logging.getLogger(__name__)
 
 
+class FileCallback(Protocol):
+    """Protocol for file callback functions."""
+
+    def __call__(self, file_path: str) -> None:
+        """Call the callback function with the file path."""
+        ...
+
+
 class DirectoryProcessor:
     """Handles directory traversal and tree generation."""
 
     def __init__(
-        self, exclude_patterns: Set[str], output_file: str | None = None
+        self, exclude_patterns: set[str], output_file: str | None = None
     ) -> None:
         """Initialize DirectoryProcessor.
 
@@ -53,52 +61,50 @@ class DirectoryProcessor:
 
         return excluded
 
-    def generate_tree(self, start_path: str | Path, output_file: Any) -> None:
-        """Generate a visual representation of the directory structure.
+    def generate_tree(self, start_path: str | Path) -> str:
+        """Generate a string representation of the directory tree.
 
         Args:
             start_path: Root path to start tree generation from
-            output_file: File object to write tree to
+
+        Returns:
+            str: String representation of the directory tree
 
         Raises:
             DirectoryProcessingError: If there's an error generating the tree
-            ValueError: If output_file is None
         """
         if not os.path.exists(str(start_path)):
             raise DirectoryProcessingError(f"Directory does not exist: {start_path}")
 
-        logger.info("Generating directory tree...")
         try:
-            output_file.write(
-                "================== DIRECTORY STRUCTURE ==================\n"
-            )
+            entries = [
+                e for e in os.scandir(start_path) if not self.is_excluded(Path(e.path))
+            ]
 
-            def write_tree(path: str | Path, prefix: str = "") -> None:
-                """Recursively write directory tree.
+            if not entries:
+                return ""  # Return empty string for empty directories
 
-                Args:
-                    path: Current path to process
-                    prefix: Prefix for current line
-                """
-                entries = sorted(os.scandir(path), key=lambda e: e.name)
+            lines = []
+            root_name = os.path.basename(start_path) or str(start_path)
+            lines.append(root_name + "/")
+
+            def add_to_tree(dir_path: Path, prefix: str = "") -> None:
+                entries = sorted(os.scandir(dir_path), key=lambda e: e.name)
+                entries = [e for e in entries if not self.is_excluded(Path(e.path))]
+
                 for i, entry in enumerate(entries):
-                    if self.is_excluded(Path(entry.path)):
-                        continue
-
                     is_last = i == len(entries) - 1
                     connector = "└── " if is_last else "├── "
-                    output_file.write(f"{prefix}{connector}{entry.name}\n")
+                    lines.append(f"{prefix}{connector}{entry.name}")
 
                     if entry.is_dir():
-                        new_prefix = prefix + ("    " if is_last else "│   ")
-                        write_tree(entry.path, new_prefix)
+                        next_prefix = prefix + ("    " if is_last else "│   ")
+                        add_to_tree(Path(entry.path), next_prefix)
 
-            write_tree(start_path)
-            output_file.write(
-                "================== END OF DIRECTORY STRUCTURE ==================\n\n"
-            )
-            logger.info("Directory tree generation completed")
-        except (OSError, IOError) as e:
+            add_to_tree(Path(start_path))
+            return "\n".join(lines)
+
+        except Exception as e:
             logger.error("Error generating directory tree: %s", e)
             raise DirectoryProcessingError(
                 f"Failed to generate directory tree: {e}"
@@ -107,7 +113,7 @@ class DirectoryProcessor:
     def process_directory(
         self,
         directory: str | Path,
-        callback: Callable[[str], None],
+        callback: FileCallback,
     ) -> None:
         """Process all files in a directory recursively.
 

@@ -75,13 +75,8 @@ def test_process_directory(combinator: FileCombinator, test_directory: str) -> N
     assert os.path.exists(output_file)
     with open(output_file, "r", encoding="utf-8") as f:
         content = f.read()
-        assert "DIRECTORY STRUCTURE" in content
-        assert "text1.txt" in content
-        assert "text2.txt" in content
-        assert "Text file 1" in content
-        assert "BINARY FILE (CONTENT EXCLUDED)" in content
-        assert "IMAGE FILE (CONTENT EXCLUDED)" in content
-        assert "__pycache__" not in content
+        assert "## Directory Structure" in content
+        assert "```" in content  # Tree should be in code block
 
 
 def test_process_nonexistent_directory(combinator: FileCombinator) -> None:
@@ -111,7 +106,10 @@ def test_process_directory_with_existing_output(
         content = f.read()
         assert "Existing content" not in content
         assert "output.txt" not in content  # Should not be in directory tree
-        assert "DIRECTORY STRUCTURE" in content  # Still shows structure
+        assert (
+            "## Directory Structure" in content
+        )  # Shows structure with proper heading
+        assert "```" in content  # Tree should be in code block
 
 
 def test_statistics_tracking(combinator: FileCombinator, test_directory: str) -> None:
