@@ -114,9 +114,11 @@ output:
 ```bash
 git clone https://github.com/your-username/filecombinator.git
 cd filecombinator
-make install   # Install dependencies
-make test     # Run tests
-make lint     # Run linting
+make venv                 # Create the virtual environment
+source .venv/bin/activate # Activate the virtual environment
+make install              # Install dependencies
+make test                 # Run tests
+make lint                 # Run linting
 ```
 
 ## License

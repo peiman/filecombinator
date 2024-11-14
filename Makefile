@@ -1,12 +1,21 @@
-# Makefile
 .PHONY: help venv update-pip install test lint format clean
 
 # Python version handling
 PYTHON := python3.11
 VENV := .venv
 VENV_BIN := $(VENV)/bin
+VENV_ACTIVATE := source $(VENV_BIN)/activate
+
+# Function to check if the virtual environment is active
+define ensure_venv
+	@if [ -z "$$VIRTUAL_ENV" ]; then \
+		echo "Virtual environment is not activated. Activating now..."; \
+		$(VENV_ACTIVATE); \
+	fi
+endef
 
 help:
+	@$(ensure_venv)
 	@echo "Available commands:"
 	@echo "  venv         - Create virtual environment"
 	@echo "  update-pip   - Update pip to latest version"
@@ -18,26 +27,31 @@ help:
 
 venv:
 	@if [ ! -d "$(VENV)" ]; then \
-		echo "Creating virtual environment with Python 3.11..."; \
+		echo "Creating virtual environment with $(PYTHON)..."; \
 		$(PYTHON) -m venv $(VENV); \
 	fi
 
-update-pip: venv
+update-pip:
+	@$(ensure_venv)
 	@echo "Upgrading pip..."
 	$(VENV_BIN)/pip install --upgrade pip
 
-install: update-pip
+install:
+	@$(ensure_venv)
 	$(VENV_BIN)/pip install -r requirements.txt
 	$(VENV_BIN)/pip install -r requirements-dev.txt
 	$(VENV_BIN)/pre-commit install
 
 test:
+	@$(ensure_venv)
 	$(VENV_BIN)/pytest tests/ --cov=filecombinator --cov-report=term-missing
 
 lint:
+	@$(ensure_venv)
 	$(VENV_BIN)/pre-commit run --all-files
 
 format:
+	@$(ensure_venv)
 	$(VENV_BIN)/pre-commit run black --all-files
 	$(VENV_BIN)/pre-commit run isort --all-files
 

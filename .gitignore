@@ -50,3 +50,4 @@ ENV/
 logs/
 *.log
 *_file_combinator_output.txt
+*_file_combinator_output.md
