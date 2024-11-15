@@ -3,13 +3,15 @@
 
 import os
 import tempfile
-from typing import Generator
+from typing import Any, Generator
 
 import pytest
 from click.testing import CliRunner
 
 from filecombinator.cli import main
+from filecombinator.core.combinator import FileCombinator
 from filecombinator.core.config import get_config
+from filecombinator.core.exceptions import FileCombinatorError
 
 
 @pytest.fixture
@@ -238,3 +240,206 @@ def test_cli_version() -> None:
     result = runner.invoke(main, ["--version"])
     assert result.exit_code == 0
     assert "version" in result.output.lower()
+
+
+def test_cli_output_without_tty(test_env: tuple[str, str], config_suffix: str) -> None:
+    """Test CLI output without a TTY (e.g., in a pipeline)."""
+    input_dir, output_dir = test_env
+    runner = CliRunner()
+
+    # Force non-TTY mode
+    result = runner.invoke(
+        main,
+        [
+            "--directory",
+            input_dir,
+            "--output",
+            os.path.join(output_dir, "output" + config_suffix),
+            "--no-style",  # Disable rich styling
+        ],
+        color=False,
+    )
+
+    assert result.exit_code == 0
+    assert "Processing completed" in result.output
+
+
+def test_cli_existing_output_file_no_tty(
+    test_env: tuple[str, str], config_suffix: str
+) -> None:
+    """Test handling of existing output file without TTY."""
+    input_dir, output_dir = test_env
+    output_file = os.path.join(output_dir, "existing" + config_suffix)
+
+    # Create existing output file
+    with open(output_file, "w") as f:
+        f.write("existing content")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--directory",
+            input_dir,
+            "--output",
+            output_file,
+        ],
+        color=False,
+    )
+
+    assert result.exit_code == 0
+    # Should proceed without prompting in non-TTY mode
+    assert os.path.exists(output_file)
+
+
+def test_cli_unexpected_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test handling of unexpected errors."""
+
+    def mock_process_directory(*args: Any, **kwargs: Any) -> None:
+        raise Exception("Unexpected test error")
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        # Create a test file
+        os.makedirs("test_dir")
+        with open(os.path.join("test_dir", "test.txt"), "w") as f:
+            f.write("test")
+
+        monkeypatch.setattr(FileCombinator, "process_directory", mock_process_directory)
+
+        result = runner.invoke(main, ["-d", "test_dir", "-v"])
+        assert result.exit_code == 2
+        assert "Unexpected error: Unexpected test error" in result.output
+
+
+def test_cli_verbose_logging(test_env: tuple[str, str], config_suffix: str) -> None:
+    """Test CLI with verbose logging enabled."""
+    input_dir, output_dir = test_env
+
+    # Create a file to process
+    runner = CliRunner(mix_stderr=False)
+    result = runner.invoke(
+        main,
+        [
+            "--directory",
+            input_dir,
+            "--verbose",
+            "--output",
+            os.path.join(output_dir, "output" + config_suffix),
+        ],
+    )
+
+    assert result.exit_code == 0
+    # Verify log messages in combined output
+    combined_output = (result.stdout or "") + (result.stderr or "")
+    assert "Starting directory processing" in combined_output
+    assert "Processing completed" in combined_output
+
+
+def test_cli_stderr_setup_error(
+    test_env: tuple[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test CLI handling of setup errors."""
+    input_dir, _ = test_env
+    runner = CliRunner(mix_stderr=False)
+
+    # Mock our specific setup_logging function instead of global getLogger
+    def mock_setup(*args: Any, **kwargs: Any) -> None:
+        raise OSError("Test setup error")
+
+    monkeypatch.setattr("filecombinator.cli.setup_logging", mock_setup)
+
+    result = runner.invoke(main, ["-d", input_dir])
+    assert result.exit_code == 2
+    assert "Test setup error" in (result.stderr or "")
+
+
+def test_cli_error_logging(
+    test_env: tuple[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test CLI error logging."""
+    input_dir, _ = test_env
+    runner = CliRunner(mix_stderr=False)
+
+    def mock_process(*args: Any, **kwargs: Any) -> None:
+        # Raise a specific error that cli.py handles
+        raise FileCombinatorError("Test processing error")
+
+    # Mock the specific process_directory method
+    monkeypatch.setattr(FileCombinator, "process_directory", mock_process)
+
+    result = runner.invoke(main, ["--directory", input_dir, "--verbose"])
+    assert result.exit_code == 2
+    assert "Test processing error" in (result.stderr or "")
+
+
+def test_cli_verbose_setup(test_env: tuple[str, str], config_suffix: str) -> None:
+    """Test CLI setup with verbose logging."""
+    input_dir, output_dir = test_env
+    runner = CliRunner(mix_stderr=False)
+
+    result = runner.invoke(
+        main,
+        [
+            "--directory",
+            input_dir,
+            "--verbose",
+            "--output",
+            os.path.join(output_dir, "output" + config_suffix),
+            "--no-style",  # Disable rich styling to make output checking easier
+        ],
+    )
+
+    assert result.exit_code == 0
+    # Check for debug messages that should only appear with verbose flag
+    combined_output = (result.stdout or "") + (result.stderr or "")
+    assert "Starting directory processing" in combined_output
+    assert "Created temporary file" in combined_output
+
+
+def test_cli_tty_file_overwrite_cancel(
+    test_env: tuple[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test canceling file overwrite in TTY mode."""
+    # Track mock calls
+    confirm_called = False
+
+    def mock_confirm(*args: Any, **kwargs: Any) -> bool:
+        nonlocal confirm_called
+        print("DEBUG: confirm mock called")
+        confirm_called = True
+        return False
+
+    def mock_isatty() -> bool:
+        print("DEBUG: isatty mock called")
+        return True
+
+    # Set up mocks
+    monkeypatch.setattr("filecombinator.cli.sys.stdin.isatty", mock_isatty)
+    monkeypatch.setattr(
+        "filecombinator.cli.check_output_file", lambda *args, **kwargs: False
+    )
+
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        # Create test files
+        os.makedirs("test_dir")
+        with open(os.path.join("test_dir", "test.txt"), "w") as f:
+            f.write("test content")
+
+        with open("output.md", "w") as f:
+            f.write("existing content")
+
+        # Run command
+        result = runner.invoke(
+            main,
+            ["--directory", "test_dir", "--output", "output.md"],
+            catch_exceptions=False,
+        )
+
+        print(f"DEBUG: Exit code: {result.exit_code}")
+        assert result.exit_code == 0
+
+        # Verify file wasn't changed
+        with open("output.md") as f:
+            assert f.read() == "existing content"

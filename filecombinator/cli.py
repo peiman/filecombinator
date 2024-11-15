@@ -1,10 +1,9 @@
-# filecombinator/cli.py
 """Command line interface for FileCombinator."""
 
 import logging
 import os
 import sys
-from typing import Optional
+from typing import Optional, TextIO
 
 import click
 from rich.console import Console
@@ -25,18 +24,11 @@ from .core.console import (
 )
 from .core.exceptions import FileCombinatorError
 
-# Create a global console for consistent output
-console = Console()
 logger = logging.getLogger(__name__)
 
 
 def setup_logging(verbose: bool = False, style: bool = True) -> None:
-    """Set up logging with Rich formatting.
-
-    Args:
-        verbose: Whether to enable debug logging
-        style: Whether to enable rich styling
-    """
+    """Set up logging with Rich formatting."""
     log_handler = (
         RichHandler(
             rich_tracebacks=True,
@@ -56,28 +48,30 @@ def setup_logging(verbose: bool = False, style: bool = True) -> None:
     logger.setLevel(logging.DEBUG if verbose else logging.INFO)
 
 
+def check_output_file(output_path: str, stdin: TextIO = sys.stdin) -> bool:
+    """Check if output file exists and confirm overwrite."""
+    if os.path.exists(output_path) and stdin.isatty():
+        return bool(
+            click.confirm(
+                f"Output file '{output_path}' already exists. Overwrite?", default=True
+            )
+        )
+    return True
+
+
 def display_summary(
     combinator: FileCombinator, output_file: str, style: bool = True, max_files: int = 5
 ) -> None:
-    """Display processing summary with Rich formatting.
-
-    Args:
-        combinator: FileCombinator instance with processing results
-        output_file: Path to output file
-        style: Whether to enable rich styling
-        max_files: Maximum number of files to display in tables
-    """
+    """Display processing summary with Rich formatting."""
     stats = combinator.stats
     file_lists = combinator.file_lists
 
-    # Print statistics panel
     print_success("\nProcessing completed!")
 
-    # Use global console for output
     if style:
+        console = Console()
         console.print(create_stats_panel(stats, output_file))
 
-        # Display processed files tables if we have files
         if stats.processed > 0:
             console.print(
                 create_file_table(file_lists.text, "Text Files Processed", max_files)
@@ -101,6 +95,33 @@ def display_summary(
 
     if stats.skipped > 0:
         print_warning(f"Skipped {stats.skipped} files due to errors")
+
+
+def process_directory(
+    directory: str,
+    output: str,
+    exclude: tuple[str, ...],
+    verbose: bool,
+    style: bool = True,
+) -> None:
+    """Process directory and generate output."""
+    combinator = FileCombinator(
+        additional_excludes=set(exclude) if exclude else None,
+        verbose=verbose,
+        output_file=output,
+    )
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        disable=not style or not sys.stdout.isatty(),
+    ) as progress:
+        task = progress.add_task("Processing files...", total=None)
+        combinator.process_directory(directory, output)
+        progress.update(task, completed=True)
+
+    display_summary(combinator, output, style)
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -133,67 +154,29 @@ def main(
     verbose: bool,
     style: bool,
 ) -> None:
-    """Combine multiple files while preserving directory structure.
-
-    This tool processes files in the specified directory, combining them into a
-    single output file while maintaining their original structure and metadata.
-    """
+    """Combine multiple files while preserving directory structure."""
     try:
-        # Set up logging with Rich
-        setup_logging(verbose, style)
-
         if not os.path.exists(directory):
             raise FileCombinatorError(f"Directory not found: {directory}")
 
-        # Display banner if styling is enabled
         if style:
             print_banner(get_banner())
 
-        # Get configured suffix
+        setup_logging(verbose, style)
+
         config = get_config()
         suffix = config.output_suffix
-
-        # Determine output file name if not provided
         if not output:
             dir_name = os.path.basename(os.path.abspath(directory))
             output = f"{dir_name}{suffix}"
-            logger.debug("Using default output filename: %s", output)
-        else:
-            # If output is provided without an extension, add the configured suffix
-            if not os.path.splitext(output)[1]:
-                output = f"{output}{suffix}"
-                logger.debug("Added configured suffix to output: %s", output)
+        elif not os.path.splitext(output)[1]:
+            output = f"{output}{suffix}"
 
-        # Initialize FileCombinator
-        combinator = FileCombinator(
-            additional_excludes=set(exclude) if exclude else None,
-            verbose=verbose,
-            output_file=output,
-        )
+        if not check_output_file(output):
+            print_warning("Operation cancelled by user")
+            sys.exit(0)
 
-        # Confirm overwrite if file exists
-        if os.path.exists(output) and sys.stdin.isatty():
-            if not click.confirm(
-                f"Output file '{output}' already exists. Overwrite?",
-                default=True,
-            ):
-                print_warning("Operation cancelled by user")
-                sys.exit(0)
-
-        # Process directory with progress indicator
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            TimeElapsedColumn(),
-            disable=not style or not sys.stdout.isatty(),
-        ) as progress:
-            task = progress.add_task("Processing files...", total=None)
-            # Process the directory
-            combinator.process_directory(directory, output)
-            progress.update(task, completed=True)
-
-        # Display results summary
-        display_summary(combinator, output, style)
+        process_directory(directory, output, exclude, verbose, style)
 
     except FileCombinatorError as e:
         print_error(str(e))
@@ -203,9 +186,3 @@ def main(
         if verbose:
             logger.exception("Detailed error information:")
         sys.exit(2)
-
-
-cli = main  # For backwards compatibility
-
-if __name__ == "__main__":  # pragma: no cover
-    main()
