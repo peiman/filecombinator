@@ -186,3 +186,10 @@ def main(
         if verbose:
             logger.exception("Detailed error information:")
         sys.exit(2)
+
+
+# For backward compatibility and entry point
+cli = main
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
