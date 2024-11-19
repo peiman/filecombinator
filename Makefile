@@ -44,7 +44,10 @@ install:
 
 test:
 	@$(ensure_venv)
-	$(VENV_BIN)/pytest tests/ --cov=filecombinator --cov-report=term-missing
+	$(VENV_BIN)/coverage erase
+	PYTHONPATH=${PWD} $(VENV_BIN)/pytest tests/ --cov=filecombinator --cov-report=term-missing --cov-branch
+	$(VENV_BIN)/coverage combine || true
+	$(VENV_BIN)/coverage report
 
 lint:
 	@$(ensure_venv)

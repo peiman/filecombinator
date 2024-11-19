@@ -1,0 +1,18 @@
+[run]
+branch = True
+parallel = True
+concurrency = multiprocessing
+data_file = .coverage
+source = filecombinator
+
+[paths]
+source =
+    filecombinator/
+    */filecombinator/
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise NotImplementedError
