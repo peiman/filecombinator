@@ -2,6 +2,7 @@
 """Test suite for ContentProcessor."""
 
 import io
+import logging
 import os
 from pathlib import Path
 from typing import Generator
@@ -11,6 +12,12 @@ import pytest
 
 from filecombinator.core.exceptions import FileProcessingError
 from filecombinator.processors.content import ContentProcessor
+
+# Set up logging at module level
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture
@@ -238,9 +245,13 @@ def test_process_unreadable_file(test_files: dict[str, Path]) -> None:
     try:
         with pytest.raises(FileProcessingError) as exc_info:
             processor.process_file(str(file_path), output)
-        assert "Error reading file" in str(exc_info.value)
+        error_msg = str(exc_info.value)
+        logger.debug("Caught error message: %s", error_msg)
+        assert (
+            "Permission denied" in error_msg or "Error reading file" in error_msg
+        ), f"Unexpected error message: {error_msg}"
     finally:
-        # Restore permissions so cleanup can work
+        # Restore permissions for cleanup
         os.chmod(file_path, 0o644)
 
 

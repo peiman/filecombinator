@@ -126,6 +126,38 @@ class FileTypeDetector:
         ".pdf",
     }
 
+    # Known text file extensions
+    TEXT_EXTENSIONS: Set[str] = {
+        ".txt",
+        ".json",
+        ".xml",
+        ".yaml",
+        ".yml",
+        ".md",
+        ".py",
+        ".js",
+        ".html",
+        ".css",
+        ".csv",
+        ".log",
+        ".ini",
+        ".conf",
+        ".toml",
+    }
+
+    # Known text MIME types
+    TEXT_MIME_TYPES: Set[str] = {
+        "text/",
+        "application/json",
+        "application/x-ndjson",  # Added for newline-delimited JSON
+        "application/xml",
+        "application/x-empty",
+        "application/x-yaml",
+        "application/x-javascript",
+        "application/javascript",
+        "inode/x-empty",
+    }
+
     def __init__(self) -> None:
         """Initialize the FileTypeDetector."""
         self.mime: Optional[Any] = None
@@ -137,6 +169,51 @@ class FileTypeDetector:
                 logger.debug("Could not initialize magic library: %s", e)
                 self.mime = None
 
+    def _check_for_binary_content(self, chunk: bytes) -> bool:
+        """Check if content chunk appears to be binary.
+
+        Args:
+            chunk: Bytes to check
+
+        Returns:
+            bool: True if content appears binary, False otherwise
+        """
+        # Empty content is considered text
+        if not chunk:
+            return False
+
+        # Check for null bytes
+        if b"\x00" in chunk:
+            logger.debug("Found null bytes in content")
+            return True
+
+        # Try to decode as text
+        try:
+            chunk.decode("utf-8", errors="strict")
+            return False
+        except UnicodeDecodeError:
+            logger.debug("Content failed UTF-8 decoding")
+            return True
+
+    def _read_file_chunk(self, file_path: str) -> bytes:
+        """Read a chunk of file content safely.
+
+        Args:
+            file_path: Path to the file to read
+
+        Returns:
+            bytes: The read chunk of data
+
+        Raises:
+            FileProcessingError: If there's an error reading the file
+        """
+        try:
+            with open(file_path, "rb") as f:
+                return f.read(8192)
+        except IOError as e:
+            logger.error("Error reading file %s: %s", file_path, e)
+            raise FileProcessingError(f"Error reading file {file_path}: {e}")
+
     def is_image_file(self, file_path: str | Path) -> bool:
         """Check if a file is an image.
 
@@ -146,15 +223,30 @@ class FileTypeDetector:
         Returns:
             bool: True if the file is an image, False otherwise
         """
+        file_path_str = str(file_path)
+        if not os.path.exists(file_path_str):
+            logger.debug("File %s does not exist", file_path_str)
+            return False
+
+        # Check extension first
+        extension = Path(file_path_str).suffix.lower()
+        if extension in self.IMAGE_EXTENSIONS:
+            logger.debug("File %s identified as image by extension", file_path_str)
+            return True
+
+        # Try MIME type detection
         if self.mime:
             try:
-                mime_type = self.mime.from_file(str(file_path))
+                mime_type = self.mime.from_file(file_path_str)
                 if mime_type.startswith("image/"):
+                    logger.debug(
+                        "File %s identified as image by MIME type", file_path_str
+                    )
                     return True
             except Exception as e:
-                logger.debug("Error checking mime type: %s", e)
+                logger.warning("Error checking MIME type for %s: %s", file_path_str, e)
 
-        return Path(file_path).suffix.lower() in self.IMAGE_EXTENSIONS
+        return False
 
     def is_binary_file(self, file_path: str | Path) -> bool:
         """Detect if a file is binary.
@@ -168,47 +260,67 @@ class FileTypeDetector:
         Raises:
             FileProcessingError: If there's an error reading the file
         """
-        if not os.path.exists(file_path):
-            raise FileProcessingError(f"File does not exist: {file_path}")
+        file_path_str = str(file_path)
+        logger.debug("Checking if file is binary: %s", file_path_str)
+
+        if not os.path.exists(file_path_str):
+            logger.error("File does not exist: %s", file_path_str)
+            raise FileProcessingError(f"File does not exist: {file_path_str}")
 
         # Empty files are treated as text files
-        if os.path.getsize(file_path) == 0:
+        size = os.path.getsize(file_path_str)
+        logger.debug("File size: %d bytes", size)
+        if size == 0:
+            logger.debug("Empty file %s treated as text", file_path_str)
             return False
 
-        if Path(file_path).suffix.lower() in self.BINARY_EXTENSIONS:
-            return True
+        # For .txt files, always check content regardless of MIME type
+        extension = Path(file_path_str).suffix.lower()
+        logger.debug("File extension: %s", extension)
+        if extension == ".txt":
+            logger.debug("Text file found, will check content regardless of MIME type")
+        else:
+            # For non-txt files, check known extensions first
+            if extension in self.TEXT_EXTENSIONS:
+                logger.debug("File %s identified as text by extension", file_path_str)
+                return False
+            if extension in self.BINARY_EXTENSIONS:
+                logger.debug("File %s identified as binary by extension", file_path_str)
+                return True
 
-        if self.mime:
-            try:
-                mime_type = self.mime.from_file(str(file_path))
-                # Treat standard text formats as non-binary
-                return not any(
-                    mime_type.startswith(prefix)
-                    for prefix in [
-                        "text/",
-                        "application/json",
-                        "application/xml",
-                        "application/x-empty",
-                    ]
-                )
-            except Exception as e:  # pragma: no cover
-                logger.debug("Error checking mime type: %s", e)
-                # Fall back to alternative detection method
-
-        # Fallback binary detection
-        try:
-            chunk_size = 8192  # Increased for better detection
-            with SafeOpen(file_path, "rb") as f:
-                chunk = f.read(chunk_size)
-                # Consider files with null bytes as binary
-                if b"\x00" in chunk:
-                    return True
-                # Try to decode as text
+            # Then try MIME type detection
+            if self.mime:
                 try:
-                    chunk.decode("utf-8")
-                    return False
-                except UnicodeDecodeError:
-                    return True
-        except IOError as e:  # pragma: no cover
-            logger.debug("Error reading file: %s", e)
-            raise FileProcessingError(f"Error reading file {file_path}: {e}") from e
+                    mime_type = self.mime.from_file(file_path_str)
+                    logger.debug("MIME type for %s: %s", file_path_str, mime_type)
+
+                    # Check for text MIME types
+                    for text_mime in self.TEXT_MIME_TYPES:
+                        if mime_type.startswith(text_mime):
+                            logger.debug(
+                                "File %s identified as text by MIME type %s",
+                                file_path_str,
+                                mime_type,
+                            )
+                            return False
+                    logger.debug("No matching text MIME type found")
+                except Exception as e:
+                    logger.warning(
+                        "Error checking mime type for %s: %s", file_path_str, e
+                    )
+
+        # For .txt files and files not identified by extension or MIME type,
+        # check content
+        logger.debug("Performing content analysis")
+        try:
+            chunk = self._read_file_chunk(file_path_str)
+            is_binary = self._check_for_binary_content(chunk)
+            logger.debug(
+                "Content analysis result for %s: %s",
+                file_path_str,
+                "binary" if is_binary else "text",
+            )
+            return is_binary
+        except Exception as e:
+            logger.error("Error during binary detection: %s", e, exc_info=True)
+            raise FileProcessingError(f"Error reading file {file_path_str}: {e}")
